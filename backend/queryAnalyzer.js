@@ -1,10 +1,10 @@
 // ============================================================
 // queryAnalyzer.js — Kullanıcının cümlesini "film kriterlerine" çevirir
 // ============================================================
-// 2. AŞAMA: Basit, anahtar kelime tabanlı bir analiz yapıyoruz.
-// 3. AŞAMA: Bu dosyanın yerini Google Gemini alacak. Gemini de
-// AYNI ŞEKİLDE bir kriter nesnesi döndüreceği için geri kalan kod
-// (TMDb araması, kartlar) hiç değişmeyecek.
+// Asıl analizi Google Gemini yapar (gemini.js). Bu dosya YEDEK analizcidir:
+// Gemini'nin ücretsiz kotası dolarsa veya Gemini cevap vermezse devreye girer.
+// İkisi de AYNI yapıda bir kriter nesnesi döndürdüğü için geri kalan kod
+// (TMDb araması, kartlar) hangisinin kullanıldığını bilmek zorunda değildir.
 //
 // Örnek:
 //   "Gerilim ama çok korkunç olmayan bir film"
@@ -55,6 +55,8 @@ function analyzeRequest(text) {
     minYear: null,
     maxYear: null,
     similarTo: [],       // Referans film adı için denenecek metinler
+    suggestedTitles: [], // Sadece Gemini doldurur
+    summary: null,       // Sadece Gemini doldurur
   };
 
   detectGenres(lowerText, criteria);
@@ -186,4 +188,4 @@ function describeCriteria(criteria, referenceMovie) {
   return labels;
 }
 
-module.exports = { analyzeRequest, describeCriteria, getGenreName };
+module.exports = { GENRES, analyzeRequest, describeCriteria, getGenreName };

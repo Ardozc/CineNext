@@ -92,7 +92,7 @@ function showLoading() {
   resultsSection.innerHTML = `
     <div class="loading">
       <div class="spinner"></div>
-      <p>Senin için en uygun filmler aranıyor...</p>
+      <p>Yapay zeka isteğini analiz ediyor ve filmleri arıyor...</p>
     </div>
     <div class="movie-grid">${skeletons}</div>
   `;
@@ -122,13 +122,26 @@ function showMovies(data, query) {
     ? data.criteria.map((label) => `<span class="criteria__tag">${escapeHTML(label)}</span>`).join("")
     : '<span class="criteria__tag">Popüler ve beğenilen filmler</span>';
 
+  // AI'ın isteği nasıl anladığını göster; AI kullanılamadıysa kullanıcıyı bilgilendir
+  let aiInfo = "";
+  if (data.summary) {
+    aiInfo += `<p class="ai-summary"><strong>✨ AI analizi:</strong> ${escapeHTML(data.summary)}</p>`;
+  }
+  if (!data.aiUsed) {
+    aiInfo += `
+      <p class="ai-summary ai-summary--fallback">
+        <strong>ℹ️ Not:</strong> Yapay zeka şu an kullanılamadığı için basit anahtar kelime analizi kullanıldı.
+      </p>`;
+  }
+
   const cards = data.movies.map(createMovieCard).join("");
 
   resultsSection.innerHTML = `
     <div class="results__header">
       <h2 class="results__title">"${escapeHTML(query)}" için öneriler</h2>
-      <span class="results__note">Film verileri TMDb'den alınmıştır</span>
+      <span class="results__note">Film verileri TMDb · Öneriler Gemini</span>
     </div>
+    ${aiInfo}
     <div class="criteria">
       <span class="criteria__label">Algılanan kriterler:</span>
       ${criteriaTags}

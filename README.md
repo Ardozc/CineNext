@@ -10,7 +10,7 @@ Ne izlemek istediğini doğal bir dille yaz, yapay zeka isteğini analiz etsin v
 |------|--------|-------|
 | 1 | Proje iskeleti, Express sunucusu, frontend tasarımı (demo veri) | ✅ |
 | 2 | TMDb API entegrasyonu + anahtar kelime tabanlı istek analizi | ✅ |
-| 3 | Google Gemini API ile istek analizi ve öneri açıklamaları | ⏳ |
+| 3 | Google Gemini API ile istek analizi ve öneri açıklamaları | ✅ |
 | 4 | "Benzer filmler" özelliği ve iyileştirmeler | ⏳ |
 
 ## 🛠️ Teknolojiler
@@ -30,11 +30,24 @@ Tarayıcı (frontend)  →  Express backend  →  TMDb / Gemini API
 
 ## ⚙️ Öneri Nasıl Çalışır?
 
-1. **Analiz:** Kullanıcının cümlesi kriterlere çevrilir.
-   `"Gerilim ama çok korkunç olmayan"` → `{ genres: [Gerilim], excludeGenres: [Korku] }`
-2. **Arama:** "X gibi" kalıbı varsa X filmi TMDb'de bulunur ve onun önerileri alınır; yoksa TMDb Discover ile tür/süre/yıl filtrelenir.
-3. **Detay:** Poster, puan, süre, tür ve açıklama TMDb'den alınır. Film bilgileri asla uydurulmaz.
-4. **Açıklama:** Her filmin neden önerildiği yazılır.
+1. **AI analizi (Gemini):** Kullanıcının cümlesi kriterlere çevrilir ve uygun film adları önerilir.
+   `"Gerilim ama çok korkunç olmayan"` → `{ genres: [Gerilim], excludeGenres: [Korku], suggestedTitles: [...] }`
+2. **Doğrulama (TMDb):** Gemini'nin önerdiği her film TMDb'de aranır. Bulunamayan film elenir, yani AI bir film uydursa bile kullanıcıya gösterilmez.
+3. **Tamamlama (TMDb):** "X gibi" dendiyse X'in TMDb önerileri, hâlâ eksik varsa TMDb Discover sonuçları eklenir.
+4. **Detay (TMDb):** Poster, puan, süre, tür ve açıklama TMDb'den alınır.
+5. **Açıklama (Gemini):** "Neden bu film?" metni, sadece TMDb'den gelen gerçek bilgilere dayanarak yazılır.
+
+### Yedek plan
+
+Gemini'nin ücretsiz kotası dolarsa, key tanımlı değilse veya servis cevap vermezse uygulama çökmez:
+anahtar kelime tabanlı analizci (`queryAnalyzer.js`) ve şablon açıklamalar devreye girer, kullanıcıya küçük bir not gösterilir.
+
+## 💸 Ücretsiz Gemini Kullanımı
+
+- Varsayılan model: `gemini-3.5-flash-lite` (hızlı, ücretsiz katmanda kullanılabilir). `.env` içinde `GEMINI_MODEL` ile değiştirilebilir.
+- Key'i [Google AI Studio](https://aistudio.google.com/app/apikey)'dan alın ve projede **faturalandırmayı (billing) açmayın**. Böylece limit aşılsa bile ücret çıkmaz, sadece `429` hatası döner.
+- Her öneri araması 2 Gemini isteği kullanır (analiz + açıklamalar).
+- Ücretsiz katmanda gönderilen veriler Google tarafından ürün geliştirme amacıyla kullanılabilir; kişisel bilgi girmeyin.
 
 ## 🔌 API
 
@@ -46,6 +59,8 @@ Tarayıcı (frontend)  →  Express backend  →  TMDb / Gemini API
 
 // Cevap
 {
+  "summary": "90 dakikayı geçmeyen, sürükleyici bir gizem filmi arıyor.",
+  "aiUsed": true,
   "criteria": ["Gizem", "En fazla 90 dk"],
   "movies": [
     {
@@ -58,7 +73,7 @@ Tarayıcı (frontend)  →  Express backend  →  TMDb / Gemini API
       "overview": "...",
       "posterUrl": "https://image.tmdb.org/t/p/w500/...",
       "tmdbUrl": "https://www.themoviedb.org/movie/...",
-      "reason": "İstediğin Gizem türüne uyuyor. 90 dakika ile süre tercihine uygun."
+      "reason": "Tam 90 dakikalık süresiyle sınırına uyuyor ve sonuna kadar tahmin yürütmeni sağlayacak bir gizem sunuyor."
     }
   ]
 }
@@ -79,7 +94,8 @@ ai-movie-assistant/
 ├── backend/
 │   ├── server.js          # Express sunucusu ve API route'ları
 │   ├── recommendation.js  # Öneri akışı: analiz → TMDb → açıklama
-│   ├── queryAnalyzer.js   # Cümleyi kriterlere çevirir (3. aşamada Gemini)
+│   ├── gemini.js          # Gemini API: istek analizi + öneri açıklamaları
+│   ├── queryAnalyzer.js   # Yedek analizci (Gemini kullanılamazsa)
 │   ├── tmdb.js            # TMDb API istekleri
 │   └── .env               # Gizli anahtarlar (GitHub'a gönderilmez)
 ├── .gitignore

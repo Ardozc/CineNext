@@ -19,10 +19,24 @@ function createError(message, statusCode) {
   return error;
 }
 
-// İstek 8 saniye içinde cevap vermezse iptal edilir.
-// Böylece takılan bir bağlantı kullanıcıyı sonsuza kadar bekletmez.
-function fetchWithTimeout(url) {
-  return fetch(url, { signal: AbortSignal.timeout(8000) });
+// İsteği gönderir (Node.js 18+ sürümlerinde fetch yerleşiktir, paket gerekmez).
+// - Her deneme 8 saniyede cevap vermezse iptal edilir; takılan bağlantı kullanıcıyı bekletmez.
+// - Anlık ağ kopmalarında (ECONNRESET vb.) kısa bir bekleyişle en fazla 3 kez denenir.
+async function fetchWithRetry(url, attempts = 3) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fetch(url, { signal: AbortSignal.timeout(8000) });
+    } catch (error) {
+      const reason = error.cause ? error.cause.code || error.cause.message : error.message;
+      console.warn(`TMDb bağlantı hatası (deneme ${attempt}/${attempts}):`, reason);
+
+      if (attempt === attempts) {
+        throw createError("TMDb'ye bağlanılamadı. İnternet bağlantını kontrol et.", 502);
+      }
+      // Her denemede biraz daha uzun bekle: 300ms, 600ms
+      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+    }
+  }
 }
 
 // ------------------------------------------------------------
@@ -49,19 +63,7 @@ async function tmdbRequest(endpoint, params = {}) {
     }
   }
 
-  let response;
-  try {
-    // Node.js 18+ sürümlerinde fetch yerleşik olarak gelir, paket gerekmez
-    response = await fetchWithTimeout(url);
-  } catch (firstError) {
-    // Anlık ağ kopmaları olabilir; bir kez daha deneyelim
-    try {
-      response = await fetchWithTimeout(url);
-    } catch (error) {
-      console.error("TMDb bağlantı hatası:", error.cause ? error.cause.code || error.cause.message : error.message);
-      throw createError("TMDb'ye bağlanılamadı. İnternet bağlantını kontrol et.", 502);
-    }
-  }
+  const response = await fetchWithRetry(url);
 
   if (response.status === 401) {
     throw createError("TMDb API key geçersiz. backend/.env dosyasındaki anahtarı kontrol et.", 500);
