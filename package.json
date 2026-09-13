@@ -1,0 +1,22 @@
+{
+  "name": "ai-movie-assistant",
+  "version": "0.1.0",
+  "description": "AI destekli film öneri asistanı — Node.js, Express, TMDb API ve Google Gemini API",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "node --watch backend/server.js"
+  },
+  "keywords": [
+    "movies",
+    "ai",
+    "tmdb",
+    "gemini",
+    "express"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2"
+  }
+}

@@ -1,0 +1,11 @@
+# Bağımlılıklar
+node_modules/
+
+# Gizli bilgiler (API key'ler) — ASLA GitHub'a gönderilmemeli
+.env
+backend/.env
+
+# Log ve sistem dosyaları
+npm-debug.log*
+.DS_Store
+Thumbs.db

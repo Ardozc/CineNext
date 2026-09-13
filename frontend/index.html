@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Movie Assistant</title>
+  <meta name="description" content="Nasıl bir film izlemek istediğini yaz, yapay zeka sana uygun filmleri önersin." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ÜST BÖLÜM: Logo ve açıklama -->
+  <header class="header">
+    <div class="container header__inner">
+      <a href="/" class="logo">
+        <span class="logo__icon">🎬</span>
+        <span class="logo__text">AI Movie <span class="accent">Assistant</span></span>
+      </a>
+      <span class="badge">Beta</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO: Başlık + arama alanı -->
+    <section class="hero">
+      <div class="container">
+        <h1 class="hero__title">
+          Bugün nasıl bir film<br />
+          <span class="accent">izlemek istiyorsun?</span>
+        </h1>
+        <p class="hero__subtitle">
+          Ne izlemek istediğini kendi cümlelerinle anlat. Yapay zeka isteğini analiz etsin,
+          sana gerçek film verileriyle kişisel öneriler sunsun.
+        </p>
+
+        <form class="search" id="search-form">
+          <label for="search-input" class="visually-hidden">Film isteğin</label>
+          <textarea
+            id="search-input"
+            class="search__input"
+            rows="2"
+            maxlength="300"
+            placeholder="Örn: Interstellar gibi ama daha gizemli ve çok uzun olmayan bir film..."
+          ></textarea>
+          <button type="submit" class="btn btn--primary" id="search-button">
+            <span>Film Öner</span>
+            <span aria-hidden="true">✨</span>
+          </button>
+        </form>
+
+        <!-- Örnek istekler: tıklanınca input'a yazılır -->
+        <div class="examples">
+          <span class="examples__label">Örnekler:</span>
+          <button type="button" class="chip">Gerilim ama çok korkunç olmayan bir film</button>
+          <button type="button" class="chip">Interstellar gibi bilim kurgu</button>
+          <button type="button" class="chip">Arkadaşlarla izlenebilecek komedi</button>
+          <button type="button" class="chip">90 dakikadan kısa gizem filmi</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SONUÇLAR: JavaScript bu alanı dolduracak -->
+    <section class="results container" id="results" aria-live="polite">
+      <!-- Loading, hata ve film kartları buraya eklenecek -->
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>AI Movie Assistant · Film verileri TMDb, öneriler Google Gemini ile</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
