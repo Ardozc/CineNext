@@ -199,20 +199,6 @@ textarea {
   background: var(--accent-hover);
 }
 
-.btn--ghost {
-  background: transparent;
-  color: var(--text);
-  border: 1px solid var(--border);
-  padding: 9px 14px;
-  font-size: 0.9rem;
-  width: 100%;
-}
-
-.btn--ghost:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 /* ---------- Örnek istekler ---------- */
 .examples {
   display: flex;
@@ -444,11 +430,6 @@ textarea {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 2px;
-}
-
-.movie-card__actions {
-  margin-top: auto;
-  padding-top: 4px;
 }
 
 /* ---------- Loading durumu ---------- */

@@ -201,11 +201,6 @@ function createMovieCard(movie, index) {
           <strong>Neden bu ${isTv ? "dizi" : "film"}?</strong>
           ${escapeHTML(movie.reason)}
         </p>
-        <div class="movie-card__actions">
-          <button type="button" class="btn btn--ghost" disabled title="Yakında">
-            Benzer ${isTv ? "diziler" : "filmler"}
-          </button>
-        </div>
       </div>
     </article>
   `;

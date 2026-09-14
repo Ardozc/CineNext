@@ -15,7 +15,7 @@ Belirtilmezse (veya ikisi birden istenirse) isteğe en uygun yapımlar film ve d
 | 1 | Proje iskeleti, Express sunucusu, frontend tasarımı (demo veri) | ✅ |
 | 2 | TMDb API entegrasyonu + anahtar kelime tabanlı istek analizi | ✅ |
 | 3 | Google Gemini API ile istek analizi ve öneri açıklamaları | ✅ |
-| 4 | "Benzer filmler" özelliği ve iyileştirmeler | ⏳ |
+| 4 | Dizi desteği: sadece film, sadece dizi veya karışık öneri | ✅ |
 
 ## 🛠️ Teknolojiler
 
