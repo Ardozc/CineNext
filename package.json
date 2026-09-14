@@ -1,5 +1,5 @@
 {
-  "name": "ai-movie-assistant",
+  "name": "cinenext",
   "version": "0.1.0",
   "description": "AI destekli film öneri asistanı — Node.js, Express, TMDb API ve Google Gemini API",
   "main": "backend/server.js",

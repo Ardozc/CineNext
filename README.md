@@ -1,4 +1,4 @@
-# 🎬 AI Movie Assistant
+# 🎬 CineNext
 
 Ne izlemek istediğini doğal bir dille yaz, yapay zeka isteğini analiz etsin ve **gerçek TMDb verileriyle** sana film önersin.
 
@@ -86,7 +86,7 @@ Sunucunun çalışıp çalışmadığını kontrol eder.
 ## 📁 Proje Yapısı
 
 ```
-ai-movie-assistant/
+cinenext/
 ├── frontend/
 │   ├── index.html     # Sayfa yapısı
 │   ├── style.css      # Tasarım

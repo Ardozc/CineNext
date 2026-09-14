@@ -1,5 +1,5 @@
 // ============================================================
-// AI Movie Assistant — Frontend JavaScript
+// CineNext — Frontend JavaScript
 // ============================================================
 // Akış:
 //   1. Kullanıcı isteğini yazar ve "Film Öner"e basar.

@@ -1,5 +1,5 @@
 // ============================================================
-// AI Movie Assistant — Backend (Express sunucusu)
+// CineNext — Backend (Express sunucusu)
 // ============================================================
 // Bu dosya iki iş yapar:
 // 1. frontend/ klasöründeki HTML, CSS ve JS dosyalarını tarayıcıya sunar.
@@ -34,7 +34,7 @@ app.use(express.static(path.join(__dirname, "..", "frontend")));
 
 // Sunucunun çalışıp çalışmadığını kontrol etmek için basit bir endpoint
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", message: "AI Movie Assistant backend çalışıyor 🎬" });
+  res.json({ status: "ok", message: "CineNext backend çalışıyor 🎬" });
 });
 
 // Film önerisi endpoint'i
