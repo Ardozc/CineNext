@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CineNext</title>
-  <meta name="description" content="Nasıl bir film izlemek istediğini yaz, yapay zeka sana uygun filmleri önersin." />
+  <meta name="description" content="Ne izlemek istediğini yaz, yapay zeka sana uygun film ve dizileri önersin." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet" />
@@ -27,25 +27,25 @@
     <section class="hero">
       <div class="container">
         <h1 class="hero__title">
-          Bugün nasıl bir film<br />
+          Bugün ne<br />
           <span class="accent">izlemek istiyorsun?</span>
         </h1>
         <p class="hero__subtitle">
           Ne izlemek istediğini kendi cümlelerinle anlat. Yapay zeka isteğini analiz etsin,
-          sana gerçek film verileriyle kişisel öneriler sunsun.
+          sana gerçek film ve dizi verileriyle kişisel öneriler sunsun.
         </p>
 
         <form class="search" id="search-form">
-          <label for="search-input" class="visually-hidden">Film isteğin</label>
+          <label for="search-input" class="visually-hidden">Film veya dizi isteğin</label>
           <textarea
             id="search-input"
             class="search__input"
             rows="2"
             maxlength="300"
-            placeholder="Örn: Interstellar gibi ama daha gizemli ve çok uzun olmayan bir film..."
+            placeholder="Örn: Interstellar gibi ama daha gizemli ve çok uzun olmayan bir film ya da Dark gibi bir dizi..."
           ></textarea>
           <button type="submit" class="btn btn--primary" id="search-button">
-            <span>Film Öner</span>
+            <span>Öner</span>
             <span aria-hidden="true">✨</span>
           </button>
         </form>
@@ -56,6 +56,7 @@
           <button type="button" class="chip">Gerilim ama çok korkunç olmayan bir film</button>
           <button type="button" class="chip">Interstellar gibi bilim kurgu</button>
           <button type="button" class="chip">Arkadaşlarla izlenebilecek komedi</button>
+          <button type="button" class="chip">Breaking Bad gibi sürükleyici bir dizi</button>
           <button type="button" class="chip">90 dakikadan kısa gizem filmi</button>
         </div>
       </div>
@@ -69,7 +70,7 @@
 
   <footer class="footer">
     <div class="container">
-      <p>CineNext · Film verileri TMDb, öneriler Google Gemini ile</p>
+      <p>CineNext · Film ve dizi verileri TMDb, öneriler Google Gemini ile</p>
     </div>
   </footer>
 

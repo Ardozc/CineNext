@@ -1,5 +1,5 @@
 // ============================================================
-// queryAnalyzer.js — Kullanıcının cümlesini "film kriterlerine" çevirir
+// queryAnalyzer.js — Kullanıcının cümlesini "film/dizi kriterlerine" çevirir
 // ============================================================
 // Asıl analizi Google Gemini yapar (gemini.js). Bu dosya YEDEK analizcidir:
 // Gemini'nin ücretsiz kotası dolarsa veya Gemini cevap vermezse devreye girer.
@@ -34,11 +34,42 @@ const GENRES = [
   { id: 37, name: "Western", keywords: ["western", "kovboy", "vahşi batı"] },
 ];
 
+// TMDb'de dizi türleri filmlerden farklıdır (örn. dizide "Aksiyon" ve "Macera" tek türdür:
+// 10759). Kriterler her zaman FİLM tür ID'leriyle tutulur; dizi ararken bu tablo kullanılır.
+//   exact:  Dizide birebir karşılığı olan türler
+//   approx: Karşılığı olmayan türler için en yakın dizi türleri (sadece aramada kullanılır,
+//           "hariç tut" filtresinde kullanılmaz; yoksa alakasız diziler de elenirdi)
+const TV_GENRES = {
+  exact: {
+    28: [10759], 12: [10759], 16: [16], 35: [35], 80: [80], 99: [99], 18: [18],
+    10751: [10751], 14: [10765], 9648: [9648], 878: [10765], 10752: [10768], 37: [37],
+  },
+  approx: {
+    53: [9648, 80],     // Gerilim → Gizem, Suç
+    27: [9648, 10765],  // Korku → Gizem, Bilim Kurgu & Fantastik
+    10749: [18],        // Romantik → Dram
+    36: [18, 10768],    // Tarih → Dram, Savaş & Politika
+    10402: [18],        // Müzik → Dram
+  },
+};
+
+// Film tür ID'lerini, verilen yapım türünün (movie/tv) tür ID'lerine çevirir
+function toMediaGenreIds(movieGenreIds, mediaType, { approximate = true } = {}) {
+  if (mediaType !== "tv") return movieGenreIds;
+  const ids = movieGenreIds.flatMap(
+    (id) => TV_GENRES.exact[id] || (approximate ? TV_GENRES.approx[id] || [] : [])
+  );
+  return [...new Set(ids)];
+}
+
 // Bir türü "istemiyorum" anlamına gelen kelimeler
 const NEGATION_WORDS = ["olmayan", "olmasın", "değil", "hariç", "istemiyorum"];
 
 // "Interstellar gibi" kalıbında film adını ararken atlanacak dolgu kelimeleri
-const FILLER_WORDS = ["bir", "bana", "tıpkı", "aynı", "film", "filmi", "filmine", "filme"];
+const FILLER_WORDS = [
+  "bir", "bana", "tıpkı", "aynı", "film", "filmi", "filmine", "filme",
+  "dizi", "dizisi", "dizisine", "diziye",
+];
 
 // ------------------------------------------------------------
 // Ana fonksiyon
@@ -48,7 +79,8 @@ function analyzeRequest(text) {
   const lowerText = text.toLocaleLowerCase("tr-TR");
 
   const criteria = {
-    genres: [],          // İstenen türlerin ID'leri
+    mediaType: "all",    // "movie" = sadece film, "tv" = sadece dizi, "all" = ikisi de
+    genres: [],          // İstenen türlerin ID'leri (film tür ID'leri)
     excludeGenres: [],   // İstenmeyen türlerin ID'leri
     minRuntime: null,    // Dakika
     maxRuntime: null,    // Dakika
@@ -59,12 +91,27 @@ function analyzeRequest(text) {
     summary: null,       // Sadece Gemini doldurur
   };
 
+  criteria.mediaType = detectMediaType(lowerText);
   detectGenres(lowerText, criteria);
   detectRuntime(lowerText, criteria);
   detectYears(lowerText, criteria);
   criteria.similarTo = detectSimilarMovie(text);
 
   return criteria;
+}
+
+// ------------------------------------------------------------
+// Film mi dizi mi? "gizem dizisi" → tv, "komedi filmi" → movie
+// İkisi birden geçiyorsa ("film veya dizi") ya da hiç geçmiyorsa → all
+// ------------------------------------------------------------
+function detectMediaType(lowerText) {
+  const wantsTv = /(^|\s)(dizi|sezon|bölüm|seri\b)/.test(lowerText);
+  // "çizgi film" bir tür adıdır, film isteği sayılmaz
+  const wantsMovie = /(^|\s)(film|sinema)/.test(lowerText.replace(/çizgi\s+film\S*/g, ""));
+
+  if (wantsTv && !wantsMovie) return "tv";
+  if (wantsMovie && !wantsTv) return "movie";
+  return "all";
 }
 
 // ------------------------------------------------------------
@@ -176,6 +223,8 @@ function getGenreName(id) {
 function describeCriteria(criteria, referenceMovie) {
   const labels = [];
 
+  if (criteria.mediaType === "movie") labels.push("Sadece film");
+  if (criteria.mediaType === "tv") labels.push("Sadece dizi");
   if (referenceMovie) labels.push(`Benzer: ${referenceMovie.title}`);
   criteria.genres.forEach((id) => labels.push(getGenreName(id)));
   criteria.excludeGenres.forEach((id) => labels.push(`${getGenreName(id)} hariç`));
@@ -188,4 +237,4 @@ function describeCriteria(criteria, referenceMovie) {
   return labels;
 }
 
-module.exports = { GENRES, analyzeRequest, describeCriteria, getGenreName };
+module.exports = { GENRES, analyzeRequest, describeCriteria, getGenreName, toMediaGenreIds };

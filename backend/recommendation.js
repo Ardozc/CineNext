@@ -4,23 +4,30 @@
 // Adımlar:
 //   1. Kullanıcının cümlesini kriterlere çevir
 //        → Gemini (gemini.js). Çalışmazsa yedek: queryAnalyzer.js
-//   2. Kriterlere uyan GERÇEK filmleri TMDb'de bul (tmdb.js)
+//        → mediaType: "movie" (sadece film), "tv" (sadece dizi), "all" (karışık)
+//   2. Kriterlere uyan GERÇEK film/dizileri TMDb'de bul (tmdb.js)
 //        → Gemini'nin önerdiği adlar TMDb'de doğrulanır
 //        → "X gibi" dendiyse X'in TMDb önerileri eklenir
-//        → Hâlâ az film varsa TMDb Discover ile tamamlanır
-//   3. Her film için detayları al (poster, süre, puan...)
-//   4. Gemini'ye bu gerçek bilgilerle "Neden bu film?" açıklaması yazdır
+//        → Hâlâ az sonuç varsa TMDb Discover ile tamamlanır
+//   3. Her yapım için detayları al (poster, süre, puan...)
+//   4. Gemini'ye bu gerçek bilgilerle "Neden bu film/dizi?" açıklaması yazdır
 //
-// Film adı, yılı, puanı, posteri gibi bilgilerin HEPSİ TMDb'den gelir.
+// Ad, yıl, puan, poster gibi bilgilerin HEPSİ TMDb'den gelir.
+//
+// Not: TMDb'de bir filmle bir dizinin ID'si aynı olabilir. Bu yüzden
+// yapımları "movie-603" / "tv-1396" gibi bir anahtarla (getKey) ayırt ediyoruz.
 // ============================================================
 
 const tmdb = require("./tmdb");
 const gemini = require("./gemini");
-const { analyzeRequest, describeCriteria, getGenreName } = require("./queryAnalyzer");
+const { analyzeRequest, describeCriteria, getGenreName, toMediaGenreIds } = require("./queryAnalyzer");
 
-const RESULT_COUNT = 6;      // Kullanıcıya gösterilecek film sayısı
-const BATCH_SIZE = 10;       // Aynı anda detayı alınacak film sayısı
+const RESULT_COUNT = 6;      // Kullanıcıya gösterilecek yapım sayısı
+const BATCH_SIZE = 10;       // Aynı anda detayı alınacak yapım sayısı
 const MAX_DETAIL_CALLS = 30; // TMDb'ye aşırı istek atmamak için üst sınır
+
+// Keşifte (discover) önerilmeyecek dizi türleri: Haber, Reality, Pembe Dizi, Talk Show
+const UNWANTED_TV_GENRES = [10763, 10764, 10766, 10767];
 
 async function recommendMovies(userQuery) {
   // 1) Analiz: Önce Gemini'yi dene. Kota dolmuşsa, key yoksa veya
@@ -35,16 +42,16 @@ async function recommendMovies(userQuery) {
     aiUsed = false;
   }
 
-  // 2) "X gibi" dendiyse referans filmi bul.
-  //    Hiçbir kriter bulunamadıysa, kullanıcı belki sadece bir film adı yazmıştır.
+  // 2) "X gibi" dendiyse referans yapımı bul.
+  //    Hiçbir kriter bulunamadıysa, kullanıcı belki sadece bir film/dizi adı yazmıştır.
   let referenceMovie = null;
   if (criteria.similarTo.length > 0) {
-    referenceMovie = await findReferenceMovie(criteria.similarTo);
+    referenceMovie = await findReferenceMovie(criteria.similarTo, criteria);
   } else if (!hasAnyCriteria(criteria)) {
-    referenceMovie = await findReferenceMovie([userQuery]);
+    referenceMovie = await findReferenceMovie([userQuery], criteria);
   }
 
-  // 3) Aday filmleri topla (önem sırasına göre)
+  // 3) Aday yapımları topla (önem sırasına göre)
   let candidates = await findSuggestedMovies(criteria);
 
   if (referenceMovie) {
@@ -52,25 +59,26 @@ async function recommendMovies(userQuery) {
     candidates = mergeWithoutDuplicates(candidates, fromReference);
   }
   // Discover sonuçlarını her zaman yedek olarak sona ekliyoruz: süre filtresinden
-  // sonra film sayısı 6'nın altına düşerse eksikler buradan tamamlanır.
-  // (Detaylar sadece gerektiği kadar alındığı için ek maliyeti tek bir istek)
+  // sonra sonuç sayısı 6'nın altına düşerse eksikler buradan tamamlanır.
   const discovered = await getCandidatesFromDiscover(criteria);
   candidates = mergeWithoutDuplicates(candidates, discovered);
 
-  // Referans filmin kendisini önermeyelim
-  if (referenceMovie) {
-    candidates = candidates.filter((movie) => movie.id !== referenceMovie.id);
-  }
+  // Referans yapımın kendisini önermeyelim; kullanıcı sadece film/dizi istediyse diğerini ele
+  candidates = candidates.filter(
+    (movie) =>
+      (!referenceMovie || getKey(movie) !== getKey(referenceMovie)) &&
+      matchesMediaType(movie.media_type, criteria)
+  );
 
   // 4) Detayları 10'arlı gruplar halinde al ve süre filtresini uygula.
-  //    Süre sadece detaylarda olduğu için, 6 uygun film bulana kadar devam ediyoruz.
+  //    Süre sadece detaylarda olduğu için, 6 uygun yapım bulana kadar devam ediyoruz.
   //    (Promise.all bir gruptaki istekleri aynı anda gönderir)
   const suitableMovies = [];
   for (let start = 0; start < Math.min(candidates.length, MAX_DETAIL_CALLS); start += BATCH_SIZE) {
     const batch = candidates.slice(start, start + BATCH_SIZE);
-    // Bir filmin detayı alınamazsa (null) sadece o film atlanır
+    // Bir yapımın detayı alınamazsa (null) sadece o atlanır
     const detailedMovies = await Promise.all(
-      batch.map((movie) => tmdb.getMovieDetails(movie.id).catch(() => null))
+      batch.map((movie) => tmdb.getDetails(movie.media_type, movie.id).catch(() => null))
     );
     suitableMovies.push(...detailedMovies.filter((movie) => movie && matchesRuntime(movie, criteria)));
 
@@ -79,7 +87,7 @@ async function recommendMovies(userQuery) {
 
   const selectedMovies = suitableMovies.slice(0, RESULT_COUNT);
 
-  // 5) "Neden bu film?" açıklamaları: Gemini yazar, olmazsa şablon cümle kullanılır
+  // 5) "Neden bu film/dizi?" açıklamaları: Gemini yazar, olmazsa şablon cümle kullanılır
   let aiReasons = {};
   if (aiUsed && selectedMovies.length > 0) {
     try {
@@ -92,12 +100,13 @@ async function recommendMovies(userQuery) {
 
   const movies = selectedMovies.map((movie) => ({
     ...movie,
-    reason: aiReasons[movie.id] || buildTemplateReason(movie, criteria, referenceMovie),
+    reason: aiReasons[movie.key] || buildTemplateReason(movie, criteria, referenceMovie),
   }));
 
   return {
     summary: criteria.summary,
     aiUsed,
+    mediaType: criteria.mediaType,
     criteria: describeCriteria(criteria, referenceMovie),
     movies,
   };
@@ -107,15 +116,24 @@ async function recommendMovies(userQuery) {
 // Aday bulma yöntemleri
 // ------------------------------------------------------------
 
-// Gemini'nin önerdiği film adlarını TMDb'de arar.
-// Sadece TMDb'de gerçekten bulunan filmler kalır; böylece AI var olmayan
-// bir film uydursa bile kullanıcıya asla gösterilmez.
+// Gemini'nin önerdiği adları TMDb'de arar.
+// Sadece TMDb'de gerçekten bulunanlar kalır; böylece AI var olmayan
+// bir yapım uydursa bile kullanıcıya asla gösterilmez.
 async function findSuggestedMovies(criteria) {
   const searches = criteria.suggestedTitles.map(async (suggestion) => {
-    // Tek bir arama başarısız olursa tüm öneriyi bozmasın; o filmi atla
-    const results = await tmdb.searchMovies(suggestion.title).catch(() => []);
-    // Aynı isimli farklı filmleri ayırt etmek için yılı da kontrol et (±1 yıl tolerans)
-    return results.find((movie) => movie.vote_count >= 50 && isAboutSameYear(movie, suggestion.year));
+    // Tür belliyse sadece o türde ara; değilse film ve diziyi birlikte ara.
+    // Tek bir arama başarısız olursa tüm öneriyi bozmasın; o yapımı atla.
+    const results = await (suggestion.type
+      ? tmdb.search(suggestion.type, suggestion.title)
+      : tmdb.searchMulti(suggestion.title)
+    ).catch(() => []);
+    // Aynı isimli farklı yapımları ayırt etmek için yılı da kontrol et (±1 yıl tolerans)
+    return results.find(
+      (movie) =>
+        movie.vote_count >= 50 &&
+        matchesMediaType(movie.media_type, criteria) &&
+        isAboutSameYear(movie, suggestion.year)
+    );
   });
 
   const foundMovies = (await Promise.all(searches)).filter(Boolean);
@@ -129,54 +147,83 @@ async function findSuggestedMovies(criteria) {
   );
 }
 
-// Olası film adlarını sırayla dener, yeterince bilinen ilk eşleşmeyi döner
-async function findReferenceMovie(titleCandidates) {
+// Olası adları sırayla dener, yeterince bilinen ilk eşleşmeyi döner.
+// Film ve dizi birlikte aranır; kullanıcı sadece birini istediyse o tür öncelikli.
+// ("Breaking Bad gibi bir film" → referans yine dizi olabilir, bu normal)
+async function findReferenceMovie(titleCandidates, criteria) {
   for (const title of titleCandidates) {
-    const results = await tmdb.searchMovies(title);
-    const match = results.find((movie) => movie.vote_count >= 50);
+    const results = (await tmdb.searchMulti(title)).filter((movie) => movie.vote_count >= 50);
+    const match = results.find((movie) => matchesMediaType(movie.media_type, criteria)) || results[0];
     if (match) return match;
   }
   return null;
 }
 
-// Referans filme göre TMDb önerilerini alır ve kullanıcının kriterlerine göre sıralar
+// Referans yapıma göre TMDb önerilerini alır ve kullanıcının kriterlerine göre sıralar.
+// TMDb film için film, dizi için dizi önerir. Kullanıcı diğer türü istiyorsa
+// bu adımı atlıyoruz; Gemini önerileri ve Discover o durumu karşılar.
 async function getCandidatesFromReference(referenceMovie, criteria) {
-  const recommendations = await tmdb.getRecommendations(referenceMovie.id);
+  if (!matchesMediaType(referenceMovie.media_type, criteria)) return [];
+
+  const recommendations = await tmdb.getRecommendations(referenceMovie.media_type, referenceMovie.id);
 
   const filtered = recommendations.filter(
     (movie) => movie.vote_count >= 100 && !hasExcludedGenre(movie, criteria) && matchesYear(movie, criteria)
   );
 
-  // Kullanıcının istediği türlerle en çok eşleşen filmler öne gelsin.
+  // Kullanıcının istediği türlerle en çok eşleşenler öne gelsin.
   // Örn: "Interstellar gibi ama daha gizemli" → Gizem türündekiler başa geçer.
   // Eşitlik varsa puanı yüksek olan öne geçer.
-  const countMatches = (movie) => movie.genre_ids.filter((id) => criteria.genres.includes(id)).length;
+  const countMatches = (movie) => {
+    const requested = toMediaGenreIds(criteria.genres, movie.media_type);
+    return movie.genre_ids.filter((id) => requested.includes(id)).length;
+  };
   return filtered.sort(
     (a, b) => countMatches(b) - countMatches(a) || b.vote_average - a.vote_average
   );
 }
 
-// TMDb "discover" ile tür/süre/yıl filtrelerine uyan, bilinen ve beğenilen filmler.
-// "vote_count.desc" sıralaması çok oy almış (yani çok izlenmiş) filmleri öne getirir;
-// "popularity.desc" ise henüz az oy almış yeni filmleri öne çıkarıyordu.
+// TMDb "discover" ile tür/süre/yıl filtrelerine uyan, bilinen ve beğenilen yapımlar.
+// mediaType "all" ise film ve dizi aramaları paralel yapılır ve sırayla karıştırılır
+// (film, dizi, film, dizi...) ki ikisi de listede adil yer bulsun.
 async function getCandidatesFromDiscover(criteria) {
+  const mediaTypes = criteria.mediaType === "all" ? ["movie", "tv"] : [criteria.mediaType];
+  const resultLists = await Promise.all(
+    mediaTypes.map((mediaType) => discoverByMediaType(mediaType, criteria))
+  );
+  return interleave(resultLists);
+}
+
+// "vote_count.desc" sıralaması çok oy almış (yani çok izlenmiş) yapımları öne getirir;
+// "popularity.desc" ise henüz az oy almış yeni yapımları öne çıkarıyordu.
+async function discoverByMediaType(mediaType, criteria) {
+  const isTv = mediaType === "tv";
+  const dateField = isTv ? "first_air_date" : "primary_release_date";
+  const genres = toMediaGenreIds(criteria.genres, mediaType);
+
+  // Dizide bir tür birden çok türe karşılık gelebilir (Gerilim → Gizem, Suç).
+  // "Hepsini içersin" (VE) aramasında her türün sadece ilk karşılığını kullanıyoruz.
+  const primaryGenres = [...new Set(criteria.genres.map((id) => toMediaGenreIds([id], mediaType)[0]).filter(Boolean))];
+  const excludeGenres = toMediaGenreIds(criteria.excludeGenres, mediaType, { approximate: false });
+
   const filters = {
-    with_genres: criteria.genres.join(","), // virgül = hepsini içersin (VE)
-    without_genres: criteria.excludeGenres.join(","),
+    with_genres: primaryGenres.join(","), // virgül = hepsini içersin (VE)
+    without_genres: [...excludeGenres, ...(isTv ? UNWANTED_TV_GENRES : [])].join(","),
     "with_runtime.gte": criteria.minRuntime,
     "with_runtime.lte": criteria.maxRuntime,
-    "primary_release_date.gte": criteria.minYear ? `${criteria.minYear}-01-01` : null,
-    "primary_release_date.lte": criteria.maxYear ? `${criteria.maxYear}-12-31` : null,
+    [`${dateField}.gte`]: criteria.minYear ? `${criteria.minYear}-01-01` : null,
+    [`${dateField}.lte`]: criteria.maxYear ? `${criteria.maxYear}-12-31` : null,
     "vote_average.gte": 6.5,
-    "vote_count.gte": 300,
+    // Diziler filmlere göre daha az oy alıyor, eşiği biraz düşük tutuyoruz
+    "vote_count.gte": isTv ? 150 : 300,
     sort_by: "vote_count.desc",
   };
 
-  let results = await tmdb.discoverMovies(filters);
+  let results = await tmdb.discover(mediaType, filters);
 
   // Birden fazla tür istendiyse ve az sonuç çıktıysa, "herhangi biri" (VEYA) ile tekrar dene
-  if (results.length < RESULT_COUNT && criteria.genres.length > 1) {
-    const moreResults = await tmdb.discoverMovies({ ...filters, with_genres: criteria.genres.join("|") });
+  if (results.length < RESULT_COUNT && genres.length > 1) {
+    const moreResults = await tmdb.discover(mediaType, { ...filters, with_genres: genres.join("|") });
     results = mergeWithoutDuplicates(results, moreResults);
   }
 
@@ -184,16 +231,19 @@ async function getCandidatesFromDiscover(criteria) {
 }
 
 // ------------------------------------------------------------
-// Yedek "Neden bu film?" açıklaması (Gemini kullanılamazsa)
+// Yedek "Neden bu film/dizi?" açıklaması (Gemini kullanılamazsa)
 // ------------------------------------------------------------
 function buildTemplateReason(movie, criteria, referenceMovie) {
   const parts = [];
+  const isTv = movie.mediaType === "tv";
 
   if (referenceMovie) {
-    parts.push(`${referenceMovie.title} filmine benzer bir yapım.`);
+    parts.push(`${referenceMovie.title} yapımına benzer bir ${isTv ? "dizi" : "film"}.`);
   }
 
-  const matchedGenres = movie.genreIds.filter((id) => criteria.genres.includes(id)).map(getGenreName);
+  // Tür adlarını yapımın kendi (Türkçe) tür listesinden alıyoruz; dizi türleri filmlerden farklı
+  const requested = toMediaGenreIds(criteria.genres, movie.mediaType);
+  const matchedGenres = movie.genres.filter((name, index) => requested.includes(movie.genreIds[index]));
   if (matchedGenres.length > 0) {
     parts.push(`İstediğin ${matchedGenres.join(" ve ")} türüne uyuyor.`);
   }
@@ -203,11 +253,17 @@ function buildTemplateReason(movie, criteria, referenceMovie) {
   }
 
   if ((criteria.maxRuntime || criteria.minRuntime) && movie.runtime) {
-    parts.push(`${movie.runtime} dakika ile süre tercihine uygun.`);
+    parts.push(
+      isTv
+        ? `Bölüm başına ${movie.runtime} dakika ile süre tercihine uygun.`
+        : `${movie.runtime} dakika ile süre tercihine uygun.`
+    );
   }
 
   if (parts.length === 0) {
-    parts.push(`TMDb'de ${movie.voteCount} oyla ${movie.rating}/10 puan almış, izleyicilerin beğendiği bir film.`);
+    parts.push(
+      `TMDb'de ${movie.voteCount} oyla ${movie.rating}/10 puan almış, izleyicilerin beğendiği bir ${isTv ? "dizi" : "film"}.`
+    );
   }
 
   return parts.join(" ");
@@ -226,14 +282,25 @@ function hasAnyCriteria(criteria) {
   );
 }
 
-function hasExcludedGenre(movie, criteria) {
-  return movie.genre_ids.some((id) => criteria.excludeGenres.includes(id));
+function getKey(movie) {
+  return `${movie.media_type}-${movie.id}`;
 }
 
-// Tür istendiyse, film TMDb'ye göre bu türlerden en az birine sahip olmalı
+function matchesMediaType(mediaType, criteria) {
+  return criteria.mediaType === "all" || criteria.mediaType === mediaType;
+}
+
+// Sadece birebir karşılığı olan türler hariç tutulur (bkz. queryAnalyzer.js TV_GENRES)
+function hasExcludedGenre(movie, criteria) {
+  const excluded = toMediaGenreIds(criteria.excludeGenres, movie.media_type, { approximate: false });
+  return movie.genre_ids.some((id) => excluded.includes(id));
+}
+
+// Tür istendiyse, yapım TMDb'ye göre bu türlerden (dizide yakın karşılıklarından) en az birine sahip olmalı
 function sharesRequestedGenre(movie, criteria) {
   if (criteria.genres.length === 0) return true;
-  return movie.genre_ids.some((id) => criteria.genres.includes(id));
+  const requested = toMediaGenreIds(criteria.genres, movie.media_type);
+  return movie.genre_ids.some((id) => requested.includes(id));
 }
 
 function getReleaseYear(movie) {
@@ -245,6 +312,7 @@ function isAboutSameYear(movie, year) {
   return Math.abs(getReleaseYear(movie) - year) <= 1;
 }
 
+// Dizilerde runtime bölüm başına süredir
 function matchesRuntime(movie, criteria) {
   if (!criteria.minRuntime && !criteria.maxRuntime) return true;
   if (!movie.runtime) return false; // Süresi bilinmiyorsa filtreyi geçemez
@@ -261,15 +329,27 @@ function matchesYear(movie, criteria) {
 }
 
 function mergeWithoutDuplicates(firstList, secondList) {
-  const ids = new Set(firstList.map((movie) => movie.id));
+  const keys = new Set(firstList.map(getKey));
   const merged = [...firstList];
   for (const movie of secondList) {
-    if (!ids.has(movie.id)) {
-      ids.add(movie.id);
+    if (!keys.has(getKey(movie))) {
+      keys.add(getKey(movie));
       merged.push(movie);
     }
   }
   return merged;
+}
+
+// [[a1, a2], [b1, b2, b3]] → [a1, b1, a2, b2, b3]
+function interleave(lists) {
+  const result = [];
+  const longest = Math.max(0, ...lists.map((list) => list.length));
+  for (let i = 0; i < longest; i++) {
+    for (const list of lists) {
+      if (i < list.length) result.push(list[i]);
+    }
+  }
+  return result;
 }
 
 module.exports = { recommendMovies };

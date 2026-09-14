@@ -2,10 +2,10 @@
 // CineNext — Frontend JavaScript
 // ============================================================
 // Akış:
-//   1. Kullanıcı isteğini yazar ve "Film Öner"e basar.
+//   1. Kullanıcı isteğini yazar ve "Öner"e basar.
 //   2. Bu dosya isteği KENDİ backend'imize gönderir: POST /api/recommend
-//   3. Backend TMDb'den gerçek filmleri bulup JSON olarak döner.
-//   4. Gelen filmleri kart olarak ekrana çizeriz.
+//   3. Backend TMDb'den gerçek film/dizileri bulup JSON olarak döner.
+//   4. Gelen yapımları kart olarak ekrana çizeriz.
 //
 // ÖNEMLİ: Bu dosyaya ASLA API key yazılmaz. Tarayıcıdaki
 // her kodu kullanıcılar görebilir. Key'ler sadece backend/.env içinde.
@@ -42,7 +42,7 @@ form.addEventListener("submit", async (event) => {
 
   // Basit doğrulama: boş istek gönderilmesin
   if (query.length < 3) {
-    showError("Lütfen nasıl bir film istediğini biraz daha detaylı yaz.");
+    showError("Lütfen ne izlemek istediğini biraz daha detaylı yaz.");
     return;
   }
 
@@ -92,7 +92,7 @@ function showLoading() {
   resultsSection.innerHTML = `
     <div class="loading">
       <div class="spinner"></div>
-      <p>Yapay zeka isteğini analiz ediyor ve filmleri arıyor...</p>
+      <p>Yapay zeka isteğini analiz ediyor ve film/dizileri arıyor...</p>
     </div>
     <div class="movie-grid">${skeletons}</div>
   `;
@@ -112,15 +112,18 @@ function showError(message) {
 function showMovies(data, query) {
   setButtonLoading(false);
 
+  // "film", "dizi" veya "film/dizi": mesajlarda kullanıcının istediği türden bahsedelim
+  const typeName = { movie: "film", tv: "dizi" }[data.mediaType] || "film/dizi";
+
   if (data.movies.length === 0) {
-    showError("Bu isteğe uygun film bulunamadı. Farklı bir şekilde anlatmayı dene.");
+    showError(`Bu isteğe uygun ${typeName} bulunamadı. Farklı bir şekilde anlatmayı dene.`);
     return;
   }
 
   // Backend'in algıladığı kriterleri etiket olarak göster
   const criteriaTags = data.criteria.length
     ? data.criteria.map((label) => `<span class="criteria__tag">${escapeHTML(label)}</span>`).join("")
-    : '<span class="criteria__tag">Popüler ve beğenilen filmler</span>';
+    : `<span class="criteria__tag">Popüler ve beğenilen ${typeName} önerileri</span>`;
 
   // AI'ın isteği nasıl anladığını göster; AI kullanılamadıysa kullanıcıyı bilgilendir
   let aiInfo = "";
@@ -139,7 +142,7 @@ function showMovies(data, query) {
   resultsSection.innerHTML = `
     <div class="results__header">
       <h2 class="results__title">"${escapeHTML(query)}" için öneriler</h2>
-      <span class="results__note">Film verileri TMDb · Öneriler Gemini</span>
+      <span class="results__note">Film/dizi verileri TMDb · Öneriler Gemini</span>
     </div>
     ${aiInfo}
     <div class="criteria">
@@ -150,19 +153,33 @@ function showMovies(data, query) {
   `;
 }
 
-// Tek bir film için kart HTML'i üretir
+// Tek bir film veya dizi için kart HTML'i üretir
 function createMovieCard(movie, index) {
+  const isTv = movie.mediaType === "tv";
+
   const genreTags = movie.genres
     .map((genre) => `<span class="genre-tag">${escapeHTML(genre)}</span>`)
     .join("");
 
-  // Poster yoksa film emojisi göster
+  // Poster yoksa emoji göster
   const poster = movie.posterUrl
     ? `<img src="${escapeHTML(movie.posterUrl)}" alt="${escapeHTML(movie.title)} posteri" loading="lazy" />`
-    : "🎞️";
+    : isTv ? "📺" : "🎞️";
 
-  // "2016 · 116 dk" gibi bilgi satırı (eksik bilgiler atlanır)
-  const meta = [movie.year, movie.runtime ? `${movie.runtime} dk` : null].filter(Boolean).join(" · ");
+  // Bilgi satırı (eksik bilgiler atlanır):
+  //   Film: "2016 · 116 dk"
+  //   Dizi: "2008–2013 · 5 sezon · Bölüm başı ~47 dk"
+  const meta = (
+    isTv
+      ? [
+          movie.year && movie.endYear && movie.endYear !== movie.year ? `${movie.year}–${movie.endYear}` : movie.year,
+          movie.seasons ? `${movie.seasons} sezon` : null,
+          movie.runtime ? `Bölüm başı ~${movie.runtime} dk` : null,
+        ]
+      : [movie.year, movie.runtime ? `${movie.runtime} dk` : null]
+  )
+    .filter(Boolean)
+    .join(" · ");
 
   const rating = movie.rating > 0 ? movie.rating.toFixed(1) : "—";
 
@@ -170,6 +187,7 @@ function createMovieCard(movie, index) {
     <article class="movie-card" style="animation-delay: ${index * 80}ms">
       <div class="movie-card__poster">
         ${poster}
+        <span class="movie-card__type movie-card__type--${isTv ? "tv" : "movie"}">${isTv ? "Dizi" : "Film"}</span>
         <span class="movie-card__rating">★ ${rating}</span>
       </div>
       <div class="movie-card__body">
@@ -180,12 +198,12 @@ function createMovieCard(movie, index) {
         <div class="movie-card__genres">${genreTags}</div>
         <p class="movie-card__overview">${escapeHTML(movie.overview)}</p>
         <p class="movie-card__reason">
-          <strong>Neden bu film?</strong>
+          <strong>Neden bu ${isTv ? "dizi" : "film"}?</strong>
           ${escapeHTML(movie.reason)}
         </p>
         <div class="movie-card__actions">
           <button type="button" class="btn btn--ghost" disabled title="Yakında">
-            Benzer filmler
+            Benzer ${isTv ? "diziler" : "filmler"}
           </button>
         </div>
       </div>
@@ -197,7 +215,7 @@ function createMovieCard(movie, index) {
 
 function setButtonLoading(isLoading) {
   button.disabled = isLoading;
-  button.querySelector("span").textContent = isLoading ? "Aranıyor..." : "Film Öner";
+  button.querySelector("span").textContent = isLoading ? "Aranıyor..." : "Öner";
 }
 
 // Kullanıcıdan veya API'den gelen metni HTML'e güvenle eklemek için.

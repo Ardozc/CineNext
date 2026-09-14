@@ -37,9 +37,10 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "CineNext backend çalışıyor 🎬" });
 });
 
-// Film önerisi endpoint'i
+// Film ve dizi önerisi endpoint'i
 // İstek:  POST /api/recommend   gövde: { "query": "90 dakikadan kısa gizem filmi" }
-// Cevap:  { criteria: ["Gizem", "En fazla 90 dk"], movies: [ {...}, ... ] }
+// Cevap:  { mediaType: "movie", criteria: ["Sadece film", "Gizem"], movies: [ {...}, ... ] }
+//         movies içindeki her öğenin mediaType alanı "movie" veya "tv" olur
 app.post("/api/recommend", async (req, res) => {
   const query = typeof req.body.query === "string" ? req.body.query.trim() : "";
 

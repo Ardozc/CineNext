@@ -1,8 +1,12 @@
 # 🎬 CineNext
 
-Ne izlemek istediğini doğal bir dille yaz, yapay zeka isteğini analiz etsin ve **gerçek TMDb verileriyle** sana film önersin.
+Ne izlemek istediğini doğal bir dille yaz, yapay zeka isteğini analiz etsin ve **gerçek TMDb verileriyle** sana film ve dizi önersin.
 
 > "Interstellar gibi ama daha gizemli ve çok uzun olmayan bir film istiyorum."
+> "Breaking Bad gibi sürükleyici bir dizi."
+
+**Film mi dizi mi?** İstekte sadece "film" geçiyorsa yalnızca film, sadece "dizi" geçiyorsa yalnızca dizi önerilir.
+Belirtilmezse (veya ikisi birden istenirse) isteğe en uygun yapımlar film ve dizi karışık olarak döner.
 
 ## 🚧 Proje Durumu
 
@@ -30,12 +34,15 @@ Tarayıcı (frontend)  →  Express backend  →  TMDb / Gemini API
 
 ## ⚙️ Öneri Nasıl Çalışır?
 
-1. **AI analizi (Gemini):** Kullanıcının cümlesi kriterlere çevrilir ve uygun film adları önerilir.
-   `"Gerilim ama çok korkunç olmayan"` → `{ genres: [Gerilim], excludeGenres: [Korku], suggestedTitles: [...] }`
-2. **Doğrulama (TMDb):** Gemini'nin önerdiği her film TMDb'de aranır. Bulunamayan film elenir, yani AI bir film uydursa bile kullanıcıya gösterilmez.
-3. **Tamamlama (TMDb):** "X gibi" dendiyse X'in TMDb önerileri, hâlâ eksik varsa TMDb Discover sonuçları eklenir.
-4. **Detay (TMDb):** Poster, puan, süre, tür ve açıklama TMDb'den alınır.
-5. **Açıklama (Gemini):** "Neden bu film?" metni, sadece TMDb'den gelen gerçek bilgilere dayanarak yazılır.
+1. **AI analizi (Gemini):** Kullanıcının cümlesi kriterlere çevrilir ve uygun film/dizi adları önerilir.
+   `"Gerilim ama çok korkunç olmayan bir dizi"` → `{ mediaType: "tv", genres: [Gerilim], excludeGenres: [Korku], suggestedTitles: [...] }`
+2. **Doğrulama (TMDb):** Gemini'nin önerdiği her yapım TMDb'de aranır. Bulunamayan elenir, yani AI bir yapım uydursa bile kullanıcıya gösterilmez.
+3. **Tamamlama (TMDb):** "X gibi" dendiyse X'in TMDb önerileri, hâlâ eksik varsa TMDb Discover sonuçları eklenir (`mediaType: "all"` ise film ve dizi sırayla karıştırılır).
+4. **Detay (TMDb):** Poster, puan, süre (dizide bölüm süresi), sezon sayısı, tür ve açıklama TMDb'den alınır.
+5. **Açıklama (Gemini):** "Neden bu film/dizi?" metni, sadece TMDb'den gelen gerçek bilgilere dayanarak yazılır.
+
+> TMDb'de dizi türleri filmlerden farklıdır (örn. dizide Aksiyon ve Macera tek tür). Kriterler film tür ID'leriyle tutulur,
+> dizi ararken `queryAnalyzer.js` içindeki `TV_GENRES` tablosuyla çevrilir.
 
 ### Yedek plan
 
@@ -61,10 +68,13 @@ anahtar kelime tabanlı analizci (`queryAnalyzer.js`) ve şablon açıklamalar d
 {
   "summary": "90 dakikayı geçmeyen, sürükleyici bir gizem filmi arıyor.",
   "aiUsed": true,
-  "criteria": ["Gizem", "En fazla 90 dk"],
+  "mediaType": "movie",              // "movie" | "tv" | "all"
+  "criteria": ["Sadece film", "Gizem", "En fazla 90 dk"],
   "movies": [
     {
       "id": 598,
+      "key": "movie-598",
+      "mediaType": "movie",          // Dizilerde "tv"; ek olarak "seasons" ve "endYear" gelir, "runtime" bölüm süresidir
       "title": "Kimlik",
       "year": 2003,
       "rating": 7.2,
