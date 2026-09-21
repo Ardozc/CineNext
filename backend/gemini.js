@@ -24,6 +24,44 @@ const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models
 // Hızlı ve ücretsiz katmanda kullanılabilen model. .env'den değiştirilebilir.
 const DEFAULT_MODEL = "gemini-3.5-flash-lite";
 
+// Gemini cevaba başlama süresi ücretsiz katmanda çok değişken: ölçümlerde
+// istekler genelde 1,5-2 saniyede dönüyor ama arada 8-15 saniyeyi buluyor.
+// 15 saniyelik eski sınır bu yavaş cevapları boşuna iptal ediyordu.
+const REQUEST_TIMEOUT_MS = 30000;
+
+// Hatanın gerçek sebebini okunabilir hale getirir.
+// AbortSignal.timeout → "TimeoutError", ağ hatalarında sebep error.cause.code içinde olur.
+function describeFetchError(error) {
+  if (error.name === "TimeoutError") {
+    return REQUEST_TIMEOUT_MS / 1000 + " saniyede cevap gelmedi";
+  }
+  if (error.cause) {
+    return error.cause.code || error.cause.message;
+  }
+  return error.message;
+}
+
+// İsteği gönderir. İki farklı hata tipini ayrı ele alıyoruz:
+// - Bağlantı hatası (ECONNRESET gibi): saniyesinde döner, bir kez daha denemeye değer.
+// - Zaman aşımı: zaten 30 saniye beklenmiştir; tekrar denemek kullanıcıyı bir 30 saniye
+//   daha bekletir, o yüzden denemiyoruz. (Ölçülen en yavaş başarılı cevap 14,3 saniyeydi.)
+async function fetchGemini(url, options) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetch(url, { ...options, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    } catch (error) {
+      const reason = describeFetchError(error);
+      const isTimeout = error.name === "TimeoutError";
+      console.warn("Gemini isteği başarısız (deneme " + attempt + "): " + reason);
+
+      if (isTimeout || attempt === 2) {
+        throw createError("Gemini cevap vermedi (" + reason + ").", 502);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+}
+
 // ------------------------------------------------------------
 // Gemini'ye istek atan ve cevabı JSON olarak döndüren ortak fonksiyon
 // ------------------------------------------------------------
@@ -36,28 +74,22 @@ async function askGemini(systemPrompt, userMessage, temperature) {
 
   const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
 
-  let response;
-  try {
-    response = await fetch(`${GEMINI_BASE_URL}/${model}:generateContent`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // Key'i URL yerine header'da gönderiyoruz; böylece log'larda görünmez
-        "x-goog-api-key": apiKey,
+  const response = await fetchGemini(`${GEMINI_BASE_URL}/${model}:generateContent`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      // Key'i URL yerine header'da gönderiyoruz; böylece log'larda görünmez
+      "x-goog-api-key": apiKey,
+    },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: "user", parts: [{ text: userMessage }] }],
+      generationConfig: {
+        responseMimeType: "application/json", // Gemini'nin düz metin değil JSON döndürmesini ister
+        temperature, // 0'a yakın = tutarlı, 1'e yakın = yaratıcı
       },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: "user", parts: [{ text: userMessage }] }],
-        generationConfig: {
-          responseMimeType: "application/json", // Gemini'nin düz metin değil JSON döndürmesini ister
-          temperature, // 0'a yakın = tutarlı, 1'e yakın = yaratıcı
-        },
-      }),
-      signal: AbortSignal.timeout(15000), // 15 saniyede cevap gelmezse vazgeç
-    });
-  } catch (error) {
-    throw createError("Gemini'ye bağlanılamadı veya cevap çok gecikti.", 502);
-  }
+    }),
+  });
 
   const data = await response.json().catch(() => ({}));
 

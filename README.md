@@ -54,6 +54,11 @@ Sonuçların altındaki **Başka öner** butonu aynı isteği tekrar gönderir, 
 Gemini'nin ücretsiz kotası dolarsa, key tanımlı değilse veya servis cevap vermezse uygulama çökmez:
 anahtar kelime tabanlı analizci (`queryAnalyzer.js`) ve şablon açıklamalar devreye girer, kullanıcıya küçük bir not gösterilir.
 
+Ücretsiz katmanda Gemini'nin cevaba başlama süresi değişkendir: istekler genelde 1,5-2 saniyede döner,
+arada 8-15 saniyeyi bulur. Bu yüzden istek sınırı 30 saniyedir. Bağlantı kopmalarında (ECONNRESET gibi)
+istek bir kez daha denenir; zaman aşımında denenmez, çünkü kullanıcıyı bir 30 saniye daha bekletirdi.
+Hatanın gerçek sebebi (zaman aşımı mı, bağlantı hatası mı) sunucu log'una yazılır.
+
 ## 💸 Ücretsiz Gemini Kullanımı
 
 - Varsayılan model: `gemini-3.5-flash-lite` (hızlı, ücretsiz katmanda kullanılabilir). `.env` içinde `GEMINI_MODEL` ile değiştirilebilir.
