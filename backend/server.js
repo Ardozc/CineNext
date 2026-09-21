@@ -41,6 +41,9 @@ app.get("/api/health", (req, res) => {
 // İstek:  POST /api/recommend   gövde: { "query": "90 dakikadan kısa gizem filmi" }
 // Cevap:  { mediaType: "movie", criteria: ["Sadece film", "Gizem"], movies: [ {...}, ... ] }
 //         movies içindeki her öğenin mediaType alanı "movie" veya "tv" olur
+//
+// "Başka öner" için: gövdeye exclude eklenirse o yapımlar bir daha önerilmez.
+//   { "query": "...", "exclude": [{ "key": "tv-1396", "title": "Breaking Bad" }] }
 app.post("/api/recommend", async (req, res) => {
   const query = typeof req.body.query === "string" ? req.body.query.trim() : "";
 
@@ -49,8 +52,18 @@ app.post("/api/recommend", async (req, res) => {
     return res.status(400).json({ error: "İstek 3 ile 300 karakter arasında olmalı." });
   }
 
+  // Kullanıcının ekranda gördüğü yapımlar: tekrar önerilmemeleri için gelir.
+  // Frontend ne gönderirse göndersin, sadece beklediğimiz biçimdekileri alıyoruz.
+  const exclude = (Array.isArray(req.body.exclude) ? req.body.exclude : [])
+    .filter((item) => item && typeof item.key === "string" && /^(movie|tv)-[0-9]+$/.test(item.key))
+    .slice(0, 60)
+    .map((item) => ({
+      key: item.key,
+      title: typeof item.title === "string" ? item.title.slice(0, 100) : "",
+    }));
+
   try {
-    const result = await recommendMovies(query);
+    const result = await recommendMovies(query, exclude);
     res.json(result);
   } catch (error) {
     console.error("❌ Öneri hatası:", error.message);

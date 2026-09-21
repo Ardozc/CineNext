@@ -18,6 +18,12 @@ const button = document.getElementById("search-button");
 const resultsSection = document.getElementById("results");
 const exampleChips = document.querySelectorAll(".chip");
 
+// "Başka öner" için son aramayı ve şu ana kadar gösterilen yapımları saklıyoruz.
+// Bu liste backend'e gidiyor ve oradaki yapımlar bir daha önerilmiyor.
+const lastSearch = { query: "", shown: [] };
+
+const MORE_LABEL = "🔁 Başka öner";
+
 // ---------- 2) Örnek isteklere tıklanınca input'a yaz ----------
 exampleChips.forEach((chip) => {
   chip.addEventListener("click", () => {
@@ -46,6 +52,10 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  // Yeni bir istek: "daha önce gösterilenler" listesi sıfırlanır
+  lastSearch.query = query;
+  lastSearch.shown = [];
+
   showLoading();
 
   try {
@@ -56,15 +66,52 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
+// ---------- 3b) "Başka öner" ----------
+// Sonuç alanı her aramada yeniden çizildiği için butonu tek tek değil,
+// sonuç alanının tamamını dinleyerek yakalıyoruz.
+resultsSection.addEventListener("click", (event) => {
+  const moreButton = event.target.closest("#more-button");
+  if (moreButton) requestMore(moreButton);
+});
+
+// Aynı istek için, ekranda gösterilenler hariç yeni öneriler getirir
+async function requestMore(moreButton) {
+  const note = document.getElementById("more-note");
+
+  moreButton.disabled = true;
+  moreButton.textContent = "Aranıyor...";
+  if (note) note.textContent = "";
+
+  try {
+    const data = await fetchRecommendations(lastSearch.query, lastSearch.shown);
+
+    // Öneri kalmadıysa ekrandaki kartları silmiyoruz, sadece durumu yazıyoruz
+    if (data.movies.length === 0) {
+      moreButton.textContent = MORE_LABEL;
+      if (note) note.textContent = "Bu istek için başka öneri bulamadım. Yeni bir istek yazmayı dene.";
+      return; // Buton devre dışı kalır
+    }
+
+    showMovies(data, lastSearch.query);
+    resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    // Hata olursa mevcut öneriler ekranda kalsın, mesaj butonun altında görünsün
+    moreButton.disabled = false;
+    moreButton.textContent = MORE_LABEL;
+    if (note) note.textContent = error.message;
+  }
+}
+
 // ---------- 4) Backend ile iletişim ----------
-async function fetchRecommendations(query) {
+// exclude: kullanıcıya daha önce gösterilen yapımlar [{ key, title }]
+async function fetchRecommendations(query, exclude = []) {
   let response;
 
   try {
     response = await fetch("/api/recommend", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, exclude }),
     });
   } catch (error) {
     // fetch sadece ağ hatasında (sunucu kapalı vb.) hata fırlatır
@@ -112,6 +159,9 @@ function showError(message) {
 function showMovies(data, query) {
   setButtonLoading(false);
 
+  // Bu, aynı istek için ikinci (veya sonraki) tur mu?
+  const isMore = lastSearch.shown.length > 0;
+
   // "film", "dizi" veya "film/dizi": mesajlarda kullanıcının istediği türden bahsedelim
   const typeName = { movie: "film", tv: "dizi" }[data.mediaType] || "film/dizi";
 
@@ -137,11 +187,14 @@ function showMovies(data, query) {
       </p>`;
   }
 
+  // Gösterilenleri kaydet ki "Başka öner" aynı yapımları tekrar istemesin
+  lastSearch.shown.push(...data.movies.map((movie) => ({ key: movie.key, title: movie.title })));
+
   const cards = data.movies.map(createMovieCard).join("");
 
   resultsSection.innerHTML = `
     <div class="results__header">
-      <h2 class="results__title">"${escapeHTML(query)}" için öneriler</h2>
+      <h2 class="results__title">"${escapeHTML(query)}" için ${isMore ? "yeni " : ""}öneriler</h2>
       <span class="results__note">Film/dizi verileri TMDb · Öneriler Gemini</span>
     </div>
     ${aiInfo}
@@ -150,6 +203,10 @@ function showMovies(data, query) {
       ${criteriaTags}
     </div>
     <div class="movie-grid">${cards}</div>
+    <div class="more">
+      <button type="button" class="btn btn--more" id="more-button">${MORE_LABEL}</button>
+      <p class="more__note" id="more-note"></p>
+    </div>
   `;
 }
 

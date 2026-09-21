@@ -12,6 +12,10 @@
 //   3. Her yapım için detayları al (poster, süre, puan...)
 //   4. Gemini'ye bu gerçek bilgilerle "Neden bu film/dizi?" açıklaması yazdır
 //
+// "Başka öner": Kullanıcının ekranda gördüğü yapımlar excluded listesiyle gelir.
+// Bunlar elenir, Gemini'ye "bunları tekrar önerme" denir ve TMDb Discover'ın
+// bir sonraki sayfasına geçilir; böylece her tıklamada yeni yapımlar gelir.
+//
 // Ad, yıl, puan, poster gibi bilgilerin HEPSİ TMDb'den gelir.
 //
 // Not: TMDb'de bir filmle bir dizinin ID'si aynı olabilir. Bu yüzden
@@ -29,13 +33,18 @@ const MAX_DETAIL_CALLS = 30; // TMDb'ye aşırı istek atmamak için üst sını
 // Keşifte (discover) önerilmeyecek dizi türleri: Haber, Reality, Pembe Dizi, Talk Show
 const UNWANTED_TV_GENRES = [10763, 10764, 10766, 10767];
 
-async function recommendMovies(userQuery) {
+async function recommendMovies(userQuery, excluded = []) {
+  // Daha önce gösterilenler: [{ key: "tv-1396", title: "Breaking Bad" }]
+  const excludedKeys = new Set(excluded.map((item) => item.key));
+  // Kaçıncı tur? Her "Başka öner" tıklamasında Discover'ın bir sonraki sayfasına geçiyoruz
+  const page = Math.floor(excludedKeys.size / RESULT_COUNT) + 1;
+
   // 1) Analiz: Önce Gemini'yi dene. Kota dolmuşsa, key yoksa veya
   //    Gemini cevap vermezse uygulama bozulmasın; basit analize geç.
   let criteria;
   let aiUsed = true;
   try {
-    criteria = await gemini.analyzeRequest(userQuery);
+    criteria = await gemini.analyzeRequest(userQuery, excluded.map((item) => item.title).filter(Boolean));
   } catch (error) {
     console.warn("⚠️  Gemini analizi kullanılamadı, basit analize geçildi:", error.message);
     criteria = analyzeRequest(userQuery);
@@ -60,13 +69,15 @@ async function recommendMovies(userQuery) {
   }
   // Discover sonuçlarını her zaman yedek olarak sona ekliyoruz: süre filtresinden
   // sonra sonuç sayısı 6'nın altına düşerse eksikler buradan tamamlanır.
-  const discovered = await getCandidatesFromDiscover(criteria);
+  const discovered = await getCandidatesFromDiscover(criteria, page);
   candidates = mergeWithoutDuplicates(candidates, discovered);
 
-  // Referans yapımın kendisini önermeyelim; kullanıcı sadece film/dizi istediyse diğerini ele
+  // Referans yapımın kendisini, daha önce gösterilenleri ve kullanıcı sadece film/dizi
+  // istediyse diğer türdekileri ele
   candidates = candidates.filter(
     (movie) =>
       (!referenceMovie || getKey(movie) !== getKey(referenceMovie)) &&
+      !excludedKeys.has(getKey(movie)) &&
       matchesMediaType(movie.media_type, criteria)
   );
 
@@ -186,17 +197,17 @@ async function getCandidatesFromReference(referenceMovie, criteria) {
 // TMDb "discover" ile tür/süre/yıl filtrelerine uyan, bilinen ve beğenilen yapımlar.
 // mediaType "all" ise film ve dizi aramaları paralel yapılır ve sırayla karıştırılır
 // (film, dizi, film, dizi...) ki ikisi de listede adil yer bulsun.
-async function getCandidatesFromDiscover(criteria) {
+async function getCandidatesFromDiscover(criteria, page) {
   const mediaTypes = criteria.mediaType === "all" ? ["movie", "tv"] : [criteria.mediaType];
   const resultLists = await Promise.all(
-    mediaTypes.map((mediaType) => discoverByMediaType(mediaType, criteria))
+    mediaTypes.map((mediaType) => discoverByMediaType(mediaType, criteria, page))
   );
   return interleave(resultLists);
 }
 
 // "vote_count.desc" sıralaması çok oy almış (yani çok izlenmiş) yapımları öne getirir;
 // "popularity.desc" ise henüz az oy almış yeni yapımları öne çıkarıyordu.
-async function discoverByMediaType(mediaType, criteria) {
+async function discoverByMediaType(mediaType, criteria, page) {
   const isTv = mediaType === "tv";
   const dateField = isTv ? "first_air_date" : "primary_release_date";
   const genres = toMediaGenreIds(criteria.genres, mediaType);
@@ -217,6 +228,7 @@ async function discoverByMediaType(mediaType, criteria) {
     // Diziler filmlere göre daha az oy alıyor, eşiği biraz düşük tutuyoruz
     "vote_count.gte": isTv ? 150 : 300,
     sort_by: "vote_count.desc",
+    page,
   };
 
   let results = await tmdb.discover(mediaType, filters);
@@ -225,6 +237,13 @@ async function discoverByMediaType(mediaType, criteria) {
   if (results.length < RESULT_COUNT && genres.length > 1) {
     const moreResults = await tmdb.discover(mediaType, { ...filters, with_genres: genres.join("|") });
     results = mergeWithoutDuplicates(results, moreResults);
+  }
+
+  // Sonraki sayfa bittiyse (dar filtrelerde olabilir) ilk sayfaya dönüyoruz:
+  // oradaki yapımların çoğu zaten elenmiş olsa da kalanlar listeyi tamamlar
+  if (results.length < RESULT_COUNT && page > 1) {
+    const firstPage = await tmdb.discover(mediaType, { ...filters, page: 1 });
+    results = mergeWithoutDuplicates(results, firstPage);
   }
 
   return results;

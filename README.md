@@ -16,6 +16,7 @@ Belirtilmezse (veya ikisi birden istenirse) isteğe en uygun yapımlar film ve d
 | 2 | TMDb API entegrasyonu + anahtar kelime tabanlı istek analizi | ✅ |
 | 3 | Google Gemini API ile istek analizi ve öneri açıklamaları | ✅ |
 | 4 | Dizi desteği: sadece film, sadece dizi veya karışık öneri | ✅ |
+| 5 | "Başka öner": aynı istek için ekrandakiler hariç yeni öneriler | ✅ |
 
 ## 🛠️ Teknolojiler
 
@@ -41,6 +42,10 @@ Tarayıcı (frontend)  →  Express backend  →  TMDb / Gemini API
 4. **Detay (TMDb):** Poster, puan, süre (dizide bölüm süresi), sezon sayısı, tür ve açıklama TMDb'den alınır.
 5. **Açıklama (Gemini):** "Neden bu film/dizi?" metni, sadece TMDb'den gelen gerçek bilgilere dayanarak yazılır.
 
+### "Başka öner"
+
+Sonuçların altındaki **Başka öner** butonu aynı isteği tekrar gönderir, ama ekranda gösterilen yapımları da iletir. Backend bu yapımları eler, Gemini'ye "bunları tekrar önerme" der ve TMDb Discover'ın bir sonraki sayfasına geçer. Böylece her tıklamada 6 yeni film/dizi gelir. Yeni bir istek yazıldığında liste sıfırlanır.
+
 > TMDb'de dizi türleri filmlerden farklıdır (örn. dizide Aksiyon ve Macera tek tür). Kriterler film tür ID'leriyle tutulur,
 > dizi ararken `queryAnalyzer.js` içindeki `TV_GENRES` tablosuyla çevrilir.
 
@@ -63,6 +68,12 @@ anahtar kelime tabanlı analizci (`queryAnalyzer.js`) ve şablon açıklamalar d
 ```json
 // İstek
 { "query": "90 dakikadan kısa gizem filmi" }
+
+// İstek ("Başka öner": exclude'daki yapımlar önerilmez)
+{
+  "query": "90 dakikadan kısa gizem filmi",
+  "exclude": [{ "key": "movie-598", "title": "Kimlik" }]
+}
 
 // Cevap
 {

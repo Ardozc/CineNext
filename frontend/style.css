@@ -432,6 +432,35 @@ textarea {
   margin-bottom: 2px;
 }
 
+/* ---------- "Başka öner" ---------- */
+.more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.btn--more {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 11px 22px;
+  font-size: 0.95rem;
+}
+
+.btn--more:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.more__note {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 /* ---------- Loading durumu ---------- */
 .loading {
   text-align: center;
