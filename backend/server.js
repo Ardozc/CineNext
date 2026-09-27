@@ -28,7 +28,13 @@ const PORT = process.env.PORT || 3000;
 // .env içinde TRUST_PROXY=1 yaz. Böylece hız sınırı ziyaretçinin gerçek IP'sini
 // görür. Vekil yokken açmak tehlikelidir: herkes IP'sini taklit edebilir.
 if (process.env.TRUST_PROXY) {
-  app.set("trust proxy", Number(process.env.TRUST_PROXY));
+  try {
+    app.set("trust proxy", parseTrustProxy(process.env.TRUST_PROXY));
+  } catch (error) {
+    // Anlaşılmayan bir değerde sessizce devam etmek tehlikeli olurdu: hız sınırı
+    // gerçek IP'yi göremediğini fark etmeden çalışmaya devam ederdi.
+    console.warn("⚠️  TRUST_PROXY değeri anlaşılamadı, güvenilen vekil ayarlanmadı:", process.env.TRUST_PROXY);
+  }
 }
 
 // ------------------------------------------------------------
@@ -142,6 +148,22 @@ app.use((error, req, res, next) => {
 // ------------------------------------------------------------
 // YARDIMCILAR
 // ------------------------------------------------------------
+
+// .env'den gelen metni Express'in beklediği türe çevirir:
+//   "1" gibi sayı  → kaç vekil katmanına güvenileceği
+//   "true"/"false" → aç/kapat
+//   "loopback", IP veya IP listesi → olduğu gibi Express'e verilir
+// Express tanımadığı bir değerde hata fırlatır, onu yukarıda yakalıyoruz.
+function parseTrustProxy(value) {
+  const setting = String(value).trim();
+  if (setting === "true") return true;
+  if (setting === "false") return false;
+
+  const hops = Number(setting);
+  if (Number.isInteger(hops) && hops >= 0) return hops;
+
+  return setting;
+}
 
 // Duruma göre, iç detay içermeyen kullanıcı mesajı
 function genericMessage(statusCode) {
