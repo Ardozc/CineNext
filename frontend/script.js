@@ -115,7 +115,7 @@ async function fetchRecommendations(query, exclude = []) {
     });
   } catch (error) {
     // fetch sadece ağ hatasında (sunucu kapalı vb.) hata fırlatır
-    throw new Error("Sunucuya ulaşılamadı. Backend'in çalıştığından emin ol (npm start).");
+    throw new Error("Sunucuya ulaşılamadı. Bağlantını kontrol edip tekrar dene.");
   }
 
   const data = await response.json().catch(() => ({}));
@@ -214,10 +214,16 @@ function showMovies(data, query) {
       <p class="more__note" id="more-note"></p>
     </div>
   `;
+
+  // Kartlar sırayla belirsin diye gecikmeyi JS ile veriyoruz.
+  // HTML içine style="..." yazsaydık güvenlik politikası (CSP) engellerdi.
+  resultsSection.querySelectorAll(".movie-card").forEach((card, index) => {
+    card.style.animationDelay = index * 80 + "ms";
+  });
 }
 
 // Tek bir film veya dizi için kart HTML'i üretir
-function createMovieCard(movie, index) {
+function createMovieCard(movie) {
   const isTv = movie.mediaType === "tv";
 
   const genreTags = movie.genres
@@ -247,7 +253,7 @@ function createMovieCard(movie, index) {
   const rating = movie.rating > 0 ? movie.rating.toFixed(1) : "—";
 
   return `
-    <article class="movie-card" style="animation-delay: ${index * 80}ms">
+    <article class="movie-card">
       <div class="movie-card__poster">
         ${poster}
         <span class="movie-card__type movie-card__type--${isTv ? "tv" : "movie"}">${isTv ? "Dizi" : "Film"}</span>

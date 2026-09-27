@@ -30,6 +30,12 @@ const RESULT_COUNT = 6;      // Kullanıcıya gösterilecek yapım sayısı
 const BATCH_SIZE = 10;       // Aynı anda detayı alınacak yapım sayısı
 const MAX_DETAIL_CALLS = 30; // TMDb'ye aşırı istek atmamak için üst sınır
 
+// Gemini'ye "bunları tekrar önerme" diye kaç başlık gönderilecek.
+// Başlıklar tarayıcıdan geliyor; azı hem prompt'u kısa tutar hem de
+// istemciden gelen metnin isteğe karışma ihtimalini azaltır.
+// Eleme işini zaten başlıklar değil, anahtarlar (movie-603) yapıyor.
+const MAX_TITLES_FOR_AI = 24;
+
 // Keşifte (discover) önerilmeyecek dizi türleri: Haber, Reality, Pembe Dizi, Talk Show
 const UNWANTED_TV_GENRES = [10763, 10764, 10766, 10767];
 
@@ -47,7 +53,11 @@ async function recommendMovies(userQuery, excluded = []) {
   // "yapay zeka kullanılamadı" deniyordu, oysa analizi AI yapmıştı.
   let aiAnalysisUsed = true;
   try {
-    criteria = await gemini.analyzeRequest(userQuery, excluded.map((item) => item.title).filter(Boolean));
+    const recentTitles = excluded
+      .slice(-MAX_TITLES_FOR_AI)
+      .map((item) => item.title)
+      .filter(Boolean);
+    criteria = await gemini.analyzeRequest(userQuery, recentTitles);
   } catch (error) {
     console.warn("⚠️  Gemini analizi kullanılamadı, basit analize geçildi:", error.message);
     criteria = analyzeRequest(userQuery);

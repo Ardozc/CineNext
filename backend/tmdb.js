@@ -18,9 +18,14 @@ const LANGUAGE = "tr-TR";
 
 // Hata oluştururken HTTP durum kodunu da ekleyelim ki
 // server.js kullanıcıya doğru cevabı dönebilsin.
-function createError(message, statusCode) {
+//
+// message:     ayrıntılı, sadece sunucu log'una yazılır
+// userMessage: kullanıcıya gösterilebilecek, iç detay içermeyen mesaj.
+//              Verilmezse server.js durum koduna göre genel bir mesaj üretir.
+function createError(message, statusCode, userMessage) {
   const error = new Error(message);
   error.statusCode = statusCode;
+  if (userMessage) error.userMessage = userMessage;
   return error;
 }
 
@@ -36,7 +41,11 @@ async function fetchWithRetry(url, attempts = 3) {
       console.warn(`TMDb bağlantı hatası (deneme ${attempt}/${attempts}):`, reason);
 
       if (attempt === attempts) {
-        throw createError("TMDb'ye bağlanılamadı. İnternet bağlantını kontrol et.", 502);
+        throw createError(
+          "TMDb'ye bağlanılamadı: " + reason,
+          502,
+          "Film servisine şu an ulaşılamıyor. Lütfen birazdan tekrar dene."
+        );
       }
       // Her denemede biraz daha uzun bekle: 300ms, 600ms
       await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
