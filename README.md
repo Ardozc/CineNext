@@ -83,7 +83,8 @@ Hatanın gerçek sebebi (zaman aşımı mı, bağlantı hatası mı) sunucu log'
 // Cevap
 {
   "summary": "90 dakikayı geçmeyen, sürükleyici bir gizem filmi arıyor.",
-  "aiUsed": true,
+  "aiAnalysis": true,                // İsteği Gemini mi analiz etti?
+  "aiReasons": true,                 // Açıklamaları Gemini mi yazdı?
   "mediaType": "movie",              // "movie" | "tv" | "all"
   "criteria": ["Sadece film", "Gizem", "En fazla 90 dk"],
   "movies": [

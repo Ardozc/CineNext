@@ -180,10 +180,16 @@ function showMovies(data, query) {
   if (data.summary) {
     aiInfo += `<p class="ai-summary"><strong>✨ AI analizi:</strong> ${escapeHTML(data.summary)}</p>`;
   }
-  if (!data.aiUsed) {
+  // Analiz ve açıklamalar ayrı ayrı başarısız olabilir; hangisiyse onu söylüyoruz
+  if (!data.aiAnalysis) {
     aiInfo += `
       <p class="ai-summary ai-summary--fallback">
         <strong>ℹ️ Not:</strong> Yapay zeka şu an kullanılamadığı için basit anahtar kelime analizi kullanıldı.
+      </p>`;
+  } else if (!data.aiReasons) {
+    aiInfo += `
+      <p class="ai-summary ai-summary--fallback">
+        <strong>ℹ️ Not:</strong> Öneriler yapay zeka ile seçildi, ama "Neden bu film/dizi?" açıklamaları şu an alınamadı.
       </p>`;
   }
 

@@ -42,13 +42,16 @@ async function recommendMovies(userQuery, excluded = []) {
   // 1) Analiz: Önce Gemini'yi dene. Kota dolmuşsa, key yoksa veya
   //    Gemini cevap vermezse uygulama bozulmasın; basit analize geç.
   let criteria;
-  let aiUsed = true;
+  // İki ayrı bayrak: analizi AI mi yaptı, açıklamaları AI mı yazdı.
+  // Eskiden tek bayrak vardı; sadece açıklamalar başarısız olunca kullanıcıya
+  // "yapay zeka kullanılamadı" deniyordu, oysa analizi AI yapmıştı.
+  let aiAnalysisUsed = true;
   try {
     criteria = await gemini.analyzeRequest(userQuery, excluded.map((item) => item.title).filter(Boolean));
   } catch (error) {
     console.warn("⚠️  Gemini analizi kullanılamadı, basit analize geçildi:", error.message);
     criteria = analyzeRequest(userQuery);
-    aiUsed = false;
+    aiAnalysisUsed = false;
   }
 
   // 2) "X gibi" dendiyse referans yapımı bul.
@@ -100,14 +103,14 @@ async function recommendMovies(userQuery, excluded = []) {
 
   // 5) "Neden bu film/dizi?" açıklamaları: Gemini yazar, olmazsa şablon cümle kullanılır
   let aiReasons = {};
-  if (aiUsed && selectedMovies.length > 0) {
+  if (aiAnalysisUsed && selectedMovies.length > 0) {
     try {
       aiReasons = await gemini.generateReasons(userQuery, criteria.summary, selectedMovies);
     } catch (error) {
       console.warn("⚠️  Gemini açıklamaları alınamadı, şablon açıklamalar kullanıldı:", error.message);
-      aiUsed = false;
     }
   }
+  const aiReasonsUsed = Object.keys(aiReasons).length > 0;
 
   const movies = selectedMovies.map((movie) => ({
     ...movie,
@@ -116,7 +119,8 @@ async function recommendMovies(userQuery, excluded = []) {
 
   return {
     summary: criteria.summary,
-    aiUsed,
+    aiAnalysis: aiAnalysisUsed, // İsteği Gemini mi analiz etti?
+    aiReasons: aiReasonsUsed,   // "Neden bu film/dizi?" metinlerini Gemini mi yazdı?
     mediaType: criteria.mediaType,
     criteria: describeCriteria(criteria, referenceMovie),
     movies,

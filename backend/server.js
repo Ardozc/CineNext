@@ -56,7 +56,7 @@ app.post("/api/recommend", async (req, res) => {
   // Frontend ne gönderirse göndersin, sadece beklediğimiz biçimdekileri alıyoruz.
   const exclude = (Array.isArray(req.body.exclude) ? req.body.exclude : [])
     .filter((item) => item && typeof item.key === "string" && /^(movie|tv)-[0-9]+$/.test(item.key))
-    .slice(0, 60)
+    .slice(-60) // Sınıra takılınca en yeni 60 kayıt tutulur ki en son görülenler tekrar çıkmasın
     .map((item) => ({
       key: item.key,
       title: typeof item.title === "string" ? item.title.slice(0, 100) : "",

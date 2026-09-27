@@ -91,30 +91,72 @@ async function askGemini(systemPrompt, userMessage, temperature) {
     }),
   });
 
-  const data = await response.json().catch(() => ({}));
+  // Gövdeyi önce düz metin olarak okuyoruz. Buradaki hata (bağlantının kopması,
+  // zaman aşımının gövde okunurken dolması) ayrı raporlanmalı; eskiden bu da
+  // "geçerli bir JSON döndürmedi" diye görünüyordu ve teşhisi zorlaştırıyordu.
+  let rawBody;
+  try {
+    rawBody = await response.text();
+  } catch (error) {
+    throw createError("Gemini cevabı okunamadı (" + describeFetchError(error) + ").", 502);
+  }
 
   if (!response.ok) {
     if (response.status === 429) {
       throw createError("Gemini ücretsiz kullanım limiti doldu.", 429);
     }
-    const detail = data.error ? data.error.message : "";
+    // Hata gövdesi her zaman JSON olmayabilir (örn. HTML hata sayfası)
+    const errorBody = parseJson(rawBody);
+    const detail = errorBody && errorBody.error ? errorBody.error.message : rawBody.slice(0, 200);
     throw createError(`Gemini hatası (HTTP ${response.status}): ${detail}`, 502);
   }
 
   // Cevap metni: candidates[0].content.parts[].text
   // (?. operatörü: değer yoksa hata vermek yerine undefined döner)
+  const data = parseJson(rawBody);
+  if (!data) {
+    throw createError("Gemini JSON olmayan bir cevap döndürdü.", 502);
+  }
+
   const parts = data.candidates?.[0]?.content?.parts || [];
   const text = parts
     .filter((part) => !part.thought) // Bazı modeller "düşünme" parçaları da döndürür, onları atla
     .map((part) => part.text || "")
     .join("");
 
-  try {
-    // Nadiren ```json ... ``` bloğu içinde gelebilir, temizleyelim
-    return JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ""));
-  } catch (error) {
+  if (!text.trim()) {
+    // Cevap geldi ama içi boş: model üretime başlamadan kesilmiş olabilir
+    const candidate = data.candidates ? data.candidates[0] : null;
+    const finishReason = (candidate && candidate.finishReason) || "bilinmiyor";
+    throw createError("Gemini boş cevap döndürdü (bitiş sebebi: " + finishReason + ").", 502);
+  }
+
+  // Nadiren kod bloğu içinde gelebilir, işaretleri temizleyelim
+  const result = parseJson(stripCodeFence(text));
+  if (!result) {
     throw createError("Gemini geçerli bir JSON döndürmedi.", 502);
   }
+  return result;
+}
+
+// JSON değilse hata fırlatmak yerine null döner
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return null;
+  }
+}
+
+// ```json ... ``` sarmalayıcısını temizler
+function stripCodeFence(text) {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("```")) return trimmed;
+
+  // Baştaki ``` (veya ```json) ve sondaki ``` işaretlerini atıyoruz
+  const opened = trimmed.slice(3).replace(/^json/i, "");
+  const closing = opened.lastIndexOf("```");
+  return (closing === -1 ? opened : opened.slice(0, closing)).trim();
 }
 
 // ============================================================
