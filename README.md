@@ -133,6 +133,8 @@ cinenext/
 
 ## 🚀 Kurulum
 
+Node.js 18 veya üzeri gerekir (uygulama yerleşik `fetch` kullanıyor).
+
 ```bash
 # 1. Bağımlılıkları yükle
 npm install

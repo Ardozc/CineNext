@@ -1,20 +1,23 @@
 {
   "name": "cinenext",
   "version": "0.1.0",
-  "description": "AI destekli film öneri asistanı — Node.js, Express, TMDb API ve Google Gemini API",
+  "description": "AI destekli film ve dizi öneri asistanı — Node.js, Express, TMDb API ve Google Gemini API",
   "main": "backend/server.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node backend/server.js",
     "dev": "node --watch backend/server.js"
   },
   "keywords": [
     "movies",
+    "tv-shows",
     "ai",
     "tmdb",
     "gemini",
     "express"
   ],
-  "license": "MIT",
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.21.2"
