@@ -59,6 +59,15 @@ arada 8-15 saniyeyi bulur. Bu yüzden istek sınırı 30 saniyedir. Bağlantı k
 istek bir kez daha denenir; zaman aşımında denenmez, çünkü kullanıcıyı bir 30 saniye daha bekletirdi.
 Hatanın gerçek sebebi (zaman aşımı mı, bağlantı hatası mı) sunucu log'una yazılır.
 
+## 🛡️ Güvenlik
+
+- **API key'ler tarayıcıya hiç gitmez**, sadece backend'de `.env` içinde durur.
+- **Hız sınırı:** `/api/recommend` için IP başına dakikada 10 istek. Tek bir öneri isteği arka planda ~2 Gemini + 20-30 TMDb isteği yaptığı için sınırsız bırakmak ücretsiz kotayı dakikalar içinde bitirebilir.
+- **Güvenlik başlıkları:** `helmet` ile eklenir. CSP elle tanımlıdır; yazı tipleri (`fonts.googleapis.com`, `fonts.gstatic.com`) ve posterler (`image.tmdb.org`) dışında dış kaynak yüklenemez.
+- **Hata mesajları:** Kullanıcıya genel mesaj gider, ayrıntı yalnızca sunucu log'una yazılır.
+- **Kaçış:** Tarayıcıya basılan bütün metinler (başlık, açıklama, gerekçe, arama metni) HTML olarak kaçırılır.
+- Ters vekil arkasında yayına alırsan `.env` içine `TRUST_PROXY=1` ekle.
+
 ## 💸 Ücretsiz Gemini Kullanımı
 
 - Varsayılan model: `gemini-3.5-flash-lite` (hızlı, ücretsiz katmanda kullanılabilir). `.env` içinde `GEMINI_MODEL` ile değiştirilebilir.
